@@ -7,7 +7,7 @@ const crypto = require("crypto");
 const path = require("path");
 const { DatabaseSync } = require("node:sqlite");
 
-const PORT = process.env.PORT || 3000;
+const PORT = parseInt(process.env.PORT || '3000', 10);
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";       // TROCAR EM PRODUÇÃO
 const WEBHOOK_TOKEN  = process.env.WEBHOOK_TOKEN  || "troque-este-token";
 const LANGS = ["pt", "es", "en"];
