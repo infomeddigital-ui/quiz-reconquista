@@ -3,6 +3,3 @@ builder = "nixpacks"
 
 [deploy]
 startCommand = "node server.js"
-
-[[services]]
-port = 3000
