@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin — Quiz</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+:root{--bg:#0A0E16;--card:#121826;--line:#202A3E;--acc:#C01425;--ink:#E8EAF0;--mut:#8B93A7;--ok:#3BBE6E;--warn:#E0A93B}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,sans-serif}
+.top{display:flex;align-items:center;gap:18px;padding:14px 22px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:10;flex-wrap:wrap}
+.top h1{font-size:16px}.top h1 b{color:var(--acc)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tab{padding:8px 16px;border-radius:8px;border:1px solid var(--line);background:var(--card);cursor:pointer;color:var(--ink);font-weight:600}
+.tab.on{background:var(--acc);border-color:var(--acc)}
+.sub{display:flex;gap:6px;padding:12px 22px;flex-wrap:wrap}
+.main{padding:10px 22px 80px;max-width:1180px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:16px}
+.card h3{font-size:14px;margin-bottom:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em}
+label{display:block;font-size:12px;color:var(--mut);margin:10px 0 4px}
+input[type=text],input[type=number],textarea,select{width:100%;background:#0D1320;border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:9px 11px;font:13px/1.5 ui-monospace,monospace}
+textarea{min-height:74px;resize:vertical}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+@media(max-width:760px){.row,.row3{grid-template-columns:1fr}}
+.btn{background:var(--acc);border:none;color:#fff;padding:10px 18px;border-radius:8px;font-weight:700;cursor:pointer}
+.btn.ghost{background:transparent;border:1px solid var(--line)}
+.btn.sm{padding:5px 10px;font-size:12px}
+.step{border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden}
+.step-h{display:flex;align-items:center;gap:10px;padding:11px 14px;background:#0D1320;cursor:pointer}
+.step-h b{flex:1}.step-h .tag{font-size:11px;background:#1B2436;border-radius:6px;padding:3px 8px;color:var(--mut)}
+.step-b{padding:14px;display:none;border-top:1px solid var(--line)}
+.step.open .step-b{display:block}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+.kpi small{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.kpi b{display:block;font-size:22px;margin-top:4px}
+.kpi b.g{color:var(--ok)}
+canvas{max-height:340px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{color:var(--mut);font-size:11px;text-transform:uppercase}
+.ins{border-left:4px solid var(--mut);background:var(--card);border-radius:8px;padding:14px 16px;margin-bottom:12px}
+.ins.alta{border-color:var(--acc)}.ins.media{border-color:var(--warn)}.ins.ok{border-color:var(--ok)}
+.ins b{display:block;margin-bottom:4px}
+.ins ul{margin:8px 0 0 18px;color:var(--mut)}
+.hint{font-size:11px;color:var(--mut);margin-top:4px}
+#login{max-width:340px;margin:14vh auto;text-align:center}
+.save-bar{position:fixed;bottom:0;left:0;right:0;background:#0D1320;border-top:1px solid var(--line);padding:12px 22px;display:none;z-index:20}
+.toast{position:fixed;top:16px;right:16px;background:var(--ok);color:#06140b;padding:10px 16px;border-radius:8px;font-weight:700;display:none;z-index:30}
+</style>
+</head>
+<body>
+
+<div id="login">
+  <h1 style="margin-bottom:18px">🔐 Painel Admin</h1>
+  <input type="text" id="pw" placeholder="Senha" style="text-align:center">
+  <button class="btn" style="width:100%;margin-top:12px" onclick="login()">Entrar</button>
+  <p class="hint" id="lerr"></p>
+</div>
+
+<div id="panel" style="display:none">
+  <div class="top">
+    <h1>QUIZ <b>ADMIN</b></h1>
+    <div class="tabs" id="langTabs"></div>
+    <div style="flex:1"></div>
+    <select id="daysSel" onchange="refresh()" style="width:auto">
+      <option value="7">7 dias</option><option value="30" selected>30 dias</option>
+      <option value="90">90 dias</option><option value="365">365 dias</option>
+    </select>
+  </div>
+  <div class="sub" id="subTabs"></div>
+  <div class="main" id="content"></div>
+  <div class="save-bar" id="saveBar">
+    <button class="btn" onclick="saveCfg()">💾 Salvar alterações</button>
+    <span class="hint" style="margin-left:12px">As mudanças vão ao ar imediatamente após salvar.</span>
+  </div>
+  <div class="toast" id="toast">Salvo ✓</div>
+</div>
+
+<script>
+const LANGS=[["pt","🇧🇷 PT-BR"],["es","🇪🇸 ES"],["en","🇺🇸 EN"],["__global","🌎 GERAL"]];
+const SUBS=[["editor","Editor"],["oferta","Oferta"],["config","Configurações"],["metricas","Métricas"],["insights","Insights"]];
+let lang="pt", sub="metricas", CFG=null, charts=[];
+
+async function login(){
+  const r=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:document.getElementById("pw").value})});
+  if(r.ok) boot(); else document.getElementById("lerr").textContent="Senha incorreta.";
+}
+async function boot(){
+  document.getElementById("login").style.display="none";
+  document.getElementById("panel").style.display="block";
+  renderTabs(); refresh();
+}
+fetch("/api/me").then(r=>r.json()).then(j=>{ if(j.ok) boot(); });
+document.getElementById("pw").addEventListener("keydown",e=>{if(e.key==="Enter")login()});
+
+function renderTabs(){
+  document.getElementById("langTabs").innerHTML = LANGS.map(([k,l])=>
+    `<button class="tab ${lang===k?'on':''}" onclick="lang='${k}';renderTabs();refresh()">${l}</button>`).join("");
+  document.getElementById("subTabs").innerHTML = lang==="__global" ? "" : SUBS.map(([k,l])=>
+    `<button class="tab ${sub===k?'on':''}" onclick="sub='${k}';renderTabs();refresh()">${l}</button>`).join("");
+}
+const days=()=>document.getElementById("daysSel").value;
+function killCharts(){charts.forEach(c=>c.destroy());charts=[];}
+function toast(){const t=document.getElementById("toast");t.style.display="block";setTimeout(()=>t.style.display="none",1800);}
+
+async function refresh(){
+  killCharts();
+  document.getElementById("saveBar").style.display="none";
+  const C=document.getElementById("content");
+  if(lang==="__global") return renderGlobal(C);
+  if(sub==="metricas")  return renderMetrics(C);
+  if(sub==="insights")  return renderInsights(C);
+  CFG = await (await fetch("/api/admin/config/"+lang)).json();
+  document.getElementById("saveBar").style.display="block";
+  if(sub==="editor") return renderEditor(C);
+  if(sub==="oferta") return renderOffer(C);
+  if(sub==="config") return renderConfig(C);
+}
+
+/* ───────── EDITOR DE ETAPAS ───────── */
+function imgFields(path, slot){
+  return `<div class="row">
+    <div><label>URL da imagem</label><input type="text" data-p="${path}.url" value="${slot?.url||""}"></div>
+    <div><label>Dimensão / prompt (referência exibida no slot)</label><input type="text" data-p="${path}.hint" value="${esc(slot?.hint||"")}"></div>
+  </div>`;
+}
+function esc(s){return String(s).replace(/"/g,"&quot;")}
+function renderEditor(C){
+  C.innerHTML = `<div class="card"><h3>Etapas do quiz (${lang.toUpperCase()})</h3>
+  <p class="hint">Clique numa etapa para editar. HTML simples permitido (&lt;b&gt;, &lt;em&gt;, class='red'). Opções: uma por linha.</p></div>` +
+  CFG.steps.map((s,idx)=>{
+    let body="";
+    if(s.type==="intro") body=`
+      <label>Headline</label><textarea data-p="steps.${idx}.h">${s.h}</textarea>
+      <label>Parágrafo 1</label><textarea data-p="steps.${idx}.p1">${s.p1}</textarea>
+      <label>Parágrafo 2</label><textarea data-p="steps.${idx}.p2">${s.p2}</textarea>
+      <div class="row"><div><label>Texto do botão</label><input type="text" data-p="steps.${idx}.cta" value="${esc(s.cta)}"></div>
+      <div><label>Aviso (rodapé)</label><input type="text" data-p="steps.${idx}.warn" value="${esc(s.warn)}"></div></div>
+      ${imgFields(`steps.${idx}.img`,s.img)}`;
+    else if(s.type==="q") body=`
+      <label>Pergunta (título)</label><textarea data-p="steps.${idx}.title">${s.title}</textarea>
+      <label>Subtítulo (opcional)</label><input type="text" data-p="steps.${idx}.sub" value="${esc(s.sub||"")}">
+      <label>Opções — uma por linha</label><textarea data-p="steps.${idx}.opts" data-lines="1">${s.opts.join("\n")}</textarea>
+      ${imgFields(`steps.${idx}.img`,s.img)}`;
+    else if(s.type==="st") body=`
+      <label>Texto do statement (use &lt;span class='sep'&gt;&lt;/span&gt; para espaçar)</label>
+      <textarea data-p="steps.${idx}.html" style="min-height:110px">${s.html}</textarea>
+      <label>Texto do botão</label><input type="text" data-p="steps.${idx}.cta" value="${esc(s.cta)}">
+      ${imgFields(`steps.${idx}.img`,s.img)}`;
+    else if(s.type==="loading") body=`
+      <label>Headline</label><textarea data-p="steps.${idx}.h">${s.h}</textarea>
+      <label>Mensagens da análise — uma por linha</label><textarea data-p="steps.${idx}.msgs" data-lines="1">${s.msgs.join("\n")}</textarea>`;
+    else if(s.type==="diag") body=`
+      <label>Headline</label><textarea data-p="steps.${idx}.h">${s.h}</textarea>
+      <label>Barras do gráfico — formato: <code>Rótulo || valor%</code> (uma por linha)</label>
+      <textarea data-p="steps.${idx}.bars" data-bars="1">${s.bars.map(b=>b.label+" || "+b.value).join("\n")}</textarea>
+      <div class="row3">
+        <div><label>Posição do marcador de risco (%)</label><input type="number" min="0" max="100" data-p="steps.${idx}.riskMarker" value="${s.riskMarker}"></div>
+        <div><label>Rótulo da faixa</label><input type="text" data-p="steps.${idx}.riskLabel" value="${esc(s.riskLabel)}"></div>
+        <div><label>Tag (canto direito)</label><input type="text" data-p="steps.${idx}.riskTag" value="${esc(s.riskTag)}"></div>
+      </div>
+      <label>Parágrafo 1 (diagnóstico)</label><textarea data-p="steps.${idx}.p1">${s.p1}</textarea>
+      <label>Parágrafo 2 — use {PRODUTO} para revelar o nome</label><textarea data-p="steps.${idx}.p2">${s.p2}</textarea>
+      <label>Texto persona P1 (relação 7+ anos)</label><textarea data-p="steps.${idx}.personas.P1">${s.personas.P1}</textarea>
+      <label>Texto persona P2 (perdeu a admiração)</label><textarea data-p="steps.${idx}.personas.P2">${s.personas.P2}</textarea>
+      <label>Texto persona P3 (idealizador)</label><textarea data-p="steps.${idx}.personas.P3">${s.personas.P3}</textarea>
+      <label>Texto persona P4 (insistiu/implorou)</label><textarea data-p="steps.${idx}.personas.P4">${s.personas.P4}</textarea>
+      <label>Texto do botão</label><input type="text" data-p="steps.${idx}.cta" value="${esc(s.cta)}">`;
+    else if(s.type==="vsl") body=`
+      <label>Headline</label><textarea data-p="steps.${idx}.h">${s.h}</textarea>
+      <label>Parágrafo</label><textarea data-p="steps.${idx}.p">${s.p}</textarea>
+      <div class="row"><div><label>Texto de espera</label><input type="text" data-p="steps.${idx}.wait" value="${esc(s.wait)}"></div>
+      <div><label>Texto do botão</label><input type="text" data-p="steps.${idx}.cta" value="${esc(s.cta)}"></div></div>
+      <p class="hint">O embed do vídeo e o delay do botão ficam em <b>Configurações</b>.</p>`;
+    else if(s.type==="offer") body=`<p class="hint">Edite a página de oferta na aba <b>Oferta</b>.</p>`;
+    return `<div class="step" id="st${idx}">
+      <div class="step-h" onclick="document.getElementById('st${idx}').classList.toggle('open')">
+        <b>P${idx+1} — ${s.type==="q"?("Pergunta · "+s.key):({intro:"Abertura",st:"Statement",loading:"Tela de análise",diag:"Diagnóstico",vsl:"VSL",offer:"Oferta"})[s.type]}</b>
+        <span class="tag">${s.type}</span>
+      </div><div class="step-b">${body}</div></div>`;
+  }).join("");
+}
+
+/* ───────── OFERTA ───────── */
+function renderOffer(C){
+  const o=CFG.steps.find(s=>s.type==="offer"); const oi=CFG.steps.indexOf(o);
+  C.innerHTML=`
+  <div class="card"><h3>Headline e estrutura</h3>
+    <label>Eyebrow</label><input type="text" data-p="steps.${oi}.eyebrow" value="${esc(o.eyebrow)}">
+    <label>Headline — use {PRODUTO}</label><textarea data-p="steps.${oi}.h">${o.h}</textarea>
+  </div>
+  <div class="card"><h3>3 imagens grandes da página (sequência vertical, estilo referência)</h3>
+    ${o.imgs.map((im,k)=>`<p class="hint" style="margin-top:10px"><b>Imagem ${k+1}</b></p>${imgFields(`steps.${oi}.imgs.${k}`,im)}`).join("")}
+  </div>
+  <div class="card"><h3>Entregáveis</h3>
+    <label>Título da seção</label><input type="text" data-p="steps.${oi}.deliverTitle" value="${esc(o.deliverTitle)}">
+    <label>Itens — um por linha (HTML permitido)</label>
+    <textarea data-lines="1" data-p="steps.${oi}.deliver" style="min-height:130px">${o.deliver.join("\n")}</textarea>
+  </div>
+  <div class="card"><h3>Bônus (capas 600×840)</h3>
+    <label>Título da seção</label><input type="text" data-p="steps.${oi}.bonusTitle" value="${esc(o.bonusTitle)}">
+    ${o.bonus.map((b,k)=>`
+      <p class="hint" style="margin-top:10px"><b>Bônus ${k+1}</b></p>
+      <label>Título</label><input type="text" data-p="steps.${oi}.bonus.${k}.title" value="${esc(b.title)}">
+      ${imgFields(`steps.${oi}.bonus.${k}.img`,b.img)}`).join("")}
+  </div>
+  <div class="card"><h3>Preço</h3>
+    <div class="row3">
+      <div><label>Eyebrow do preço</label><input type="text" data-p="steps.${oi}.priceEyebrow" value="${esc(o.priceEyebrow)}"></div>
+      <div><label>Âncora ("de X por")</label><input type="text" data-p="steps.${oi}.priceAnchor" value="${esc(o.priceAnchor)}"></div>
+      <div><label>Preço</label><input type="text" data-p="steps.${oi}.price" value="${esc(o.price)}"></div>
+    </div>
+    <label>Nota abaixo do preço</label><textarea data-p="steps.${oi}.priceNote">${o.priceNote}</textarea>
+    <label>Texto do botão de compra</label><input type="text" data-p="steps.${oi}.cta" value="${esc(o.cta)}">
+    <label>Garantia</label><textarea data-p="steps.${oi}.guarantee">${o.guarantee}</textarea>
+  </div>
+  <div class="card"><h3>Depoimentos — ⚠ trocar pelos REAIS antes de publicar</h3>
+    <label>Título da seção</label><input type="text" data-p="steps.${oi}.testiTitle" value="${esc(o.testiTitle)}">
+    <label>Texto da tarja de aviso (apague a tarja deixando vazio QUANDO os reais estiverem no ar)</label>
+    <input type="text" data-p="steps.${oi}.testiBanner" value="${esc(o.testiBanner)}">
+    <label>Depoimentos — um por linha: <code>Nome || idade, profissão || texto</code></label>
+    <textarea data-testi="1" data-p="steps.${oi}.testimonials" style="min-height:120px">${o.testimonials.map(t=>[t.name,t.meta,t.text].join(" || ")).join("\n")}</textarea>
+  </div>
+  <div class="card"><h3>FAQ</h3>
+    <label>Título</label><input type="text" data-p="steps.${oi}.faqTitle" value="${esc(o.faqTitle)}">
+    <label>Itens — um por linha: <code>Pergunta || Resposta</code></label>
+    <textarea data-faq="1" data-p="steps.${oi}.faq" style="min-height:120px">${o.faq.map(f=>f.q+" || "+f.a).join("\n")}</textarea>
+    <label>Rodapé</label><input type="text" data-p="steps.${oi}.footer" value="${esc(o.footer)}">
+  </div>`;
+}
+
+/* ───────── CONFIG ───────── */
+function renderConfig(C){
+  C.innerHTML=`
+  <div class="card"><h3>Identidade</h3>
+    <div class="row">
+      <div><label>Header do quiz (nome NÃO revelado)</label><input type="text" data-p="meta.brandHeader" value="${esc(CFG.meta.brandHeader)}"></div>
+      <div><label>Nome do produto (revelado no diagnóstico/oferta via {PRODUTO})</label><input type="text" data-p="meta.productName" value="${esc(CFG.meta.productName)}"></div>
+    </div>
+  </div>
+  <div class="card"><h3>Links e VSL</h3>
+    <label>Link do checkout (UTMs da URL do quiz são repassadas automaticamente)</label>
+    <input type="text" data-p="meta.checkoutUrl" value="${esc(CFG.meta.checkoutUrl)}">
+    <label>Embed da VSL — cole aqui o código do Vturb / Panda / YouTube</label>
+    <textarea data-p="meta.vslEmbed" style="min-height:110px">${CFG.meta.vslEmbed||""}</textarea>
+    <label>Delay do botão da VSL (segundos)</label>
+    <input type="number" min="0" data-p="meta.vslDelay" value="${CFG.meta.vslDelay}">
+    <p class="hint">Dica: no Vturb, você pode zerar este delay e usar o "exibir elemento após X segundos" nativo do player.</p>
+  </div>
+  <div class="card"><h3>Webhooks de venda (cole nas plataformas)</h3>
+    <p class="hint">Kiwify → <code>${location.origin}/webhook/kiwify/${lang}?token=SEU_TOKEN</code><br>
+    Hotmart → <code>${location.origin}/webhook/hotmart/${lang}?token=SEU_TOKEN</code><br>
+    Outra → <code>${location.origin}/webhook/generic/${lang}?token=SEU_TOKEN</code> (JSON: status, amount, currency, country, state)<br>
+    O token é definido na variável de ambiente <b>WEBHOOK_TOKEN</b> do servidor.</p>
+  </div>`;
+}
+
+/* ───────── MÉTRICAS ───────── */
+async function renderMetrics(C){
+  const m=await (await fetch(`/api/admin/metrics/${lang}?days=${days()}`)).json();
+  C.innerHTML=`
+  <div class="kpis">
+    <div class="kpi"><small>Sessões iniciadas</small><b>${m.starts}</b></div>
+    <div class="kpi"><small>Chegaram à oferta</small><b>${m.finish} <span style="font-size:13px;color:var(--mut)">(${m.convQuiz}%)</span></b></div>
+    <div class="kpi"><small>Cliques em comprar</small><b>${m.checkoutClicks} <span style="font-size:13px;color:var(--mut)">(${m.convCheckout}%)</span></b></div>
+    <div class="kpi"><small>Vendas aprovadas</small><b class="g">${m.sales} <span style="font-size:13px;color:var(--mut)">(${m.convSale}%)</span></b></div>
+    <div class="kpi"><small>Faturamento</small><b class="g">${fmt(m.revenue)}</b></div>
+    <div class="kpi"><small>Reembolsos</small><b>${m.refunds}</b></div>
+  </div>
+  <div class="card"><h3>Funil — pessoas por etapa (absoluto)</h3><canvas id="cFunnel"></canvas></div>
+  <div class="card"><h3>Queda por etapa (%) — onde o lead sai</h3><canvas id="cDrop"></canvas></div>
+  <div class="row">
+    <div class="card"><h3>Sessões iniciadas por dia</h3><canvas id="cViews"></canvas></div>
+    <div class="card"><h3>Vendas e faturamento por dia</h3><canvas id="cSales"></canvas></div>
+  </div>
+  <div class="row">
+    <div class="card"><h3>Vendas por horário</h3><canvas id="cHour"></canvas></div>
+    <div class="card"><h3>Vendas por dia da semana</h3><canvas id="cWeek"></canvas></div>
+  </div>
+  <div class="row">
+    <div class="card"><h3>Vendas por país</h3><canvas id="cCountry"></canvas></div>
+    <div class="card"><h3>Vendas por estado (Brasil)</h3>${
+      m.byState.length?`<canvas id="cState"></canvas>`:`<p class="hint">Sem vendas BR com estado informado no período. Os estados chegam pelo webhook da plataforma.</p>`}</div>
+  </div>
+  <div class="card"><h3>Tabela do funil</h3><table><tr><th>Etapa</th><th>Tipo</th><th>Pessoas</th><th>Retenção</th><th>Queda da anterior</th></tr>${
+    m.funnel.map((s,k)=>{const prev=k?m.funnel[k-1].views:s.views;
+      const drop=k&&prev?((prev-s.views)/prev*100).toFixed(1)+"%":"—";
+      const ret=m.starts?(s.views/m.starts*100).toFixed(1)+"%":"—";
+      return `<tr><td>${s.label}</td><td>${s.type}</td><td><b>${s.views}</b></td><td>${ret}</td><td>${drop}</td></tr>`;}).join("")}</table></div>`;
+
+  const labels=m.funnel.map(s=>s.label);
+  charts.push(new Chart(cFunnel,{type:"bar",data:{labels,datasets:[{label:"Pessoas",data:m.funnel.map(s=>s.views),backgroundColor:"#C01425"}]},options:base()}));
+  const dropData=m.funnel.map((s,k)=>{if(!k)return 0;const p=m.funnel[k-1].views;return p?+((p-s.views)/p*100).toFixed(1):0;});
+  charts.push(new Chart(cDrop,{type:"line",data:{labels,datasets:[{label:"Queda %",data:dropData,borderColor:"#E0A93B",backgroundColor:"rgba(224,169,59,.15)",fill:true,tension:.3}]},options:base()}));
+  charts.push(new Chart(cViews,{type:"line",data:{labels:m.viewsByDay.map(d=>d.d),datasets:[{label:"Sessões",data:m.viewsByDay.map(d=>d.v),borderColor:"#4D7CFE",backgroundColor:"rgba(77,124,254,.15)",fill:true,tension:.3}]},options:base()}));
+  charts.push(new Chart(cSales,{data:{labels:m.byDay.map(d=>d.d),datasets:[
+    {type:"bar",label:"Vendas",data:m.byDay.map(d=>d.c),backgroundColor:"#3BBE6E",yAxisID:"y"},
+    {type:"line",label:"Faturamento",data:m.byDay.map(d=>d.s),borderColor:"#C01425",yAxisID:"y1",tension:.3}]},
+    options:{...base(),scales:{y:{ticks:{color:"#8B93A7"},grid:{color:"#202A3E"}},y1:{position:"right",ticks:{color:"#8B93A7"},grid:{display:false}},x:{ticks:{color:"#8B93A7"},grid:{color:"#202A3E"}}}}}));
+  // horário (00–23) — igual ao Utmify "Vendas por Horário"
+  const hLabels=Array.from({length:24},(_,i)=>String(i).padStart(2,"0")+":00");
+  const hMap=Object.fromEntries((m.byHour||[]).map(r=>[r.h,r.c]));
+  charts.push(new Chart(cHour,{type:"bar",data:{labels:hLabels,datasets:[{label:"Vendas",data:hLabels.map((_,i)=>hMap[String(i).padStart(2,"0")]||0),backgroundColor:"#4D7CFE"}]},options:base()}));
+  // dia da semana (Dom=0..Sáb=6)
+  const wNames=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+  const wMap=Object.fromEntries((m.byWeekday||[]).map(r=>[r.w,r.c]));
+  charts.push(new Chart(cWeek,{type:"bar",data:{labels:wNames,datasets:[{label:"Vendas",data:wNames.map((_,i)=>wMap[String(i)]||0),backgroundColor:"#9B59B6"}]},options:base()}));
+  charts.push(new Chart(cCountry,{type:"doughnut",data:{labels:m.byCountry.map(c=>c.k||"N/A"),datasets:[{data:m.byCountry.map(c=>c.c),backgroundColor:["#C01425","#4D7CFE","#3BBE6E","#E0A93B","#9B59B6","#16A2B8","#8B93A7"]}]},options:{plugins:{legend:{labels:{color:"#E8EAF0"}}}}}));
+  if(m.byState.length) charts.push(new Chart(cState,{type:"bar",data:{labels:m.byState.map(s=>s.k),datasets:[{label:"Vendas",data:m.byState.map(s=>s.c),backgroundColor:"#4D7CFE"}]},options:{...base(),indexAxis:"y"}}));
+}
+function base(){return {plugins:{legend:{labels:{color:"#E8EAF0"}}},scales:{y:{ticks:{color:"#8B93A7"},grid:{color:"#202A3E"}},x:{ticks:{color:"#8B93A7",maxRotation:70,minRotation:40},grid:{color:"#202A3E"}}}};}
+const fmt=(v)=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:lang==="pt"?"BRL":"USD"}).format(v||0);
+
+/* ───────── INSIGHTS ───────── */
+async function renderInsights(C){
+  const j=await (await fetch(`/api/admin/insights/${lang}?days=${days()}`)).json();
+  C.innerHTML=`<div class="card"><h3>Inteligência do funil — onde melhorar</h3>
+  <p class="hint">Regras: uma etapa é sinalizada quando a queda supera 15% OU 1,8× a mediana do funil. Severidade alta = queda acima de 35%.</p></div>`+
+  j.insights.map(x=>`<div class="ins ${x.sev}"><b>${{alta:"🔴 PRIORIDADE ALTA",media:"🟡 ATENÇÃO",info:"ℹ️ INFO",ok:"🟢 SAUDÁVEL"}[x.sev]} — ${x.where}</b>
+    ${x.msg}${x.tips?`<ul>${x.tips.map(t=>`<li>${t}</li>`).join("")}</ul>`:""}</div>`).join("");
+}
+
+/* ───────── GERAL ───────── */
+async function renderGlobal(C){
+  const g=await (await fetch(`/api/admin/global?days=${days()}`)).json();
+  C.innerHTML=`
+  <div class="kpis">
+    <div class="kpi"><small>Sessões (todos idiomas)</small><b>${g.totals.starts}</b></div>
+    <div class="kpi"><small>Vendas</small><b class="g">${g.totals.sales}</b></div>
+    <div class="kpi"><small>Faturamento</small><b class="g">${g.totals.revenue.toLocaleString("pt-BR",{minimumFractionDigits:2})}</b></div>
+  </div>
+  <div class="card"><h3>Por idioma</h3><table>
+    <tr><th>Idioma</th><th>Sessões</th><th>Vendas</th><th>Faturamento</th><th>Conv.</th></tr>
+    ${g.langs.map(l=>`<tr><td>${l.lang.toUpperCase()}</td><td>${l.starts}</td><td>${l.sales}</td>
+      <td>${l.revenue.toLocaleString("pt-BR",{minimumFractionDigits:2})}</td>
+      <td>${l.starts?(l.sales/l.starts*100).toFixed(2)+"%":"—"}</td></tr>`).join("")}
+  </table></div>
+  <div class="card"><h3>Comparativo</h3><canvas id="cGlobal"></canvas></div>`;
+  charts.push(new Chart(cGlobal,{type:"bar",data:{labels:g.langs.map(l=>l.lang.toUpperCase()),
+    datasets:[{label:"Sessões",data:g.langs.map(l=>l.starts),backgroundColor:"#4D7CFE"},
+              {label:"Vendas",data:g.langs.map(l=>l.sales),backgroundColor:"#3BBE6E"}]},options:base()}));
+}
+
+/* ───────── SALVAR (aplica data-p ao CFG) ───────── */
+function setPath(obj,path,val){
+  const ks=path.split("."); let o=obj;
+  for(let k=0;k<ks.length-1;k++){ o=o[isNaN(+ks[k])?ks[k]:+ks[k]]; }
+  o[isNaN(+ks.at(-1))?ks.at(-1):+ks.at(-1)]=val;
+}
+async function saveCfg(){
+  document.querySelectorAll("[data-p]").forEach(el=>{
+    let v=el.value;
+    if(el.dataset.lines) v=v.split("\n").map(x=>x.trim()).filter(Boolean);
+    else if(el.dataset.bars) v=v.split("\n").map(x=>x.trim()).filter(Boolean).map(l=>{const [a,b]=l.split("||");return{label:(a||"").trim(),value:+(b||0)};});
+    else if(el.dataset.testi) v=v.split("\n").map(x=>x.trim()).filter(Boolean).map(l=>{const p=l.split("||");return{name:(p[0]||"").trim(),meta:(p[1]||"").trim(),text:(p[2]||"").trim()};});
+    else if(el.dataset.faq) v=v.split("\n").map(x=>x.trim()).filter(Boolean).map(l=>{const p=l.split("||");return{q:(p[0]||"").trim(),a:(p[1]||"").trim()};});
+    else if(el.type==="number") v=+v;
+    setPath(CFG,el.dataset.p,v);
+  });
+  const r=await fetch("/api/admin/config/"+lang,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(CFG)});
+  if(r.ok) toast();
+}
+</script>
+</body>
+</html>
